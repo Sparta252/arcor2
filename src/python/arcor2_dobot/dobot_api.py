@@ -738,6 +738,73 @@ class DobotApi:
         msg.params.extend(bytearray(struct.pack("I", distance)))
         return self._send_command(msg)
 
+    def set_color_sensor(self, enable):
+            msg = Message()
+            msg.id = 137
+            msg.ctrl = 0x01 # RW
+            
+            # First byte [ON/OFF], second PORT (GP2), third Version of sensor [0/1]
+            if enable:
+                msg.params = bytearray([0x01, 0x01, 0x01])
+            else:
+                msg.params = bytearray([0x00, 0x01, 0x01])
+
+            response = self._send_command(msg)
+            return response
+    
+    def color_sensor_get_color(self):
+        msg = Message()
+        msg.id = 137
+        msg.ctrl = 0x00
+        msg.params = bytearray([])
+        response = self._send_command(msg)
+        color = response.params
+        return tuple(color)
+    
+    def color_sensor_get_color_red(self):
+        raw_color = self.get_color()
+        return raw_color[0]
+    
+    def color_sensor_get_color_green(self):
+        raw_color = self.get_color()
+        return raw_color[1]
+    
+    def color_sensor_get_color_blue(self):
+        raw_color = self.get_color()
+        return raw_color[2]
+    
+    def _set_ir_sensor(self, enable):
+        msg = Message()
+        msg.id = 138
+        msg.ctrl = 0x01 # RW ON
+        
+        # First byte [ON/OFF], second PORT (GP4), third Version of sensor [0/1]
+        if enable:
+            msg.params = bytearray([0x01, 0x03, 0x01])
+        else:
+            msg.params = bytearray([0x00, 0x03, 0x01])
+
+        response = self._send_command(msg)
+        return response
+    
+    def ir_sensor_enable(self):
+        return self._set_ir_sensor(True)
+
+    def ir_sensor_disable(self):
+        return self._set_ir_sensor(False)
+    
+    def ir_sensor_detect(self):
+        msg = Message()
+        msg.id = 138
+        msg.ctrl = 0x00
+        # must be added 0x03 - i dont know why
+        # according to dobot docs its not needed, but without it it doesnt work
+        msg.params = bytearray([0x03])
+        response = self._send_command(msg)
+        detected = response.params
+        return tuple(detected)[0]
+
+
     def _set_cp_params(self, velocity: float, acceleration: float, period: float) -> Message:
         msg = Message()
         msg.id = 90

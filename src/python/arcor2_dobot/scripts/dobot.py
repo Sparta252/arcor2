@@ -153,6 +153,40 @@ def get_started() -> RespT:
     return jsonify(started())
 
 
+@app.route("/color_sensor/state", methods=["PUT"])
+@requires_started
+def put_color_sensor_enable() -> RespT:
+    """Enable or disable the color sensor.
+    ---
+    put:
+        description: Enable or disable the color sensor.
+        tags:
+           - Color Sensor
+        parameters:
+            - in: query
+              name: enable
+              schema:
+                type: boolean
+        responses:
+            204:
+              description: Ok
+            500:
+              description: "Error types: **General**, **StartError**."
+              content:
+                application/json:
+                  schema:
+                    $ref: WebApiError
+    """   
+    state_str = request.args.get("enable", "false").lower()
+    if state_str == "true":
+        state = True
+    else:
+        state = False
+    assert _dobot is not None
+    _dobot.set_color_sensor(state)
+    return Response(status=204)
+
+
 @app.route("/conveyor/speed", methods=["PUT"])
 @requires_started
 def put_conveyor_speed() -> RespT:
