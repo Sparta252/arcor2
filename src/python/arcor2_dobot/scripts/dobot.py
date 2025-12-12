@@ -186,6 +186,32 @@ def put_color_sensor_enable() -> RespT:
     _dobot.set_color_sensor(state)
     return Response(status=204)
 
+@app.route("/color_sensor/read", methods=["GET"])
+@requires_started
+def get_color_sensor_color() -> RespT:
+    """Get the color sensor value.
+    ---
+    get:
+        description: Get the color sensor value.
+        tags:
+           - Color Sensor
+        responses:
+            200:
+              description: Ok
+              content:
+                application/json:
+                    schema:
+                        type: integer
+            500:
+              description: "Error types: **General**, **StartError**."
+              content:
+                application/json:
+                  schema:
+                    $ref: WebApiError
+    """   
+    assert _dobot is not None
+    return jsonify(_dobot.read_color_sensor()), 200
+
 
 @app.route("/conveyor/speed", methods=["PUT"])
 @requires_started

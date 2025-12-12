@@ -752,14 +752,15 @@ class DobotApi:
             response = self._send_command(msg)
             return response
     
-    def color_sensor_get_color(self):
+    def read_color_sensor(self) -> int:
         msg = Message()
         msg.id = 137
         msg.ctrl = 0x00
         msg.params = bytearray([])
         response = self._send_command(msg)
         color = response.params
-        return tuple(color)
+        r, g, b = color
+        return r * 100 + g * 10 + b
     
     def color_sensor_get_color_red(self):
         raw_color = self.get_color()
