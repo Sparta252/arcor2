@@ -1,6 +1,7 @@
 import logging
 import math
 import struct
+from time import sleep
 from collections import deque
 from enum import IntEnum
 from threading import RLock
@@ -738,7 +739,7 @@ class DobotApi:
         msg.params.extend(bytearray(struct.pack("I", distance)))
         return self._send_command(msg)
 
-    def set_color_sensor(self, enable):
+    def set_color_sensor(self, enable: bool):
             msg = Message()
             msg.id = 137
             msg.ctrl = 0x01 # RW
@@ -753,6 +754,7 @@ class DobotApi:
             return response
     
     def read_color_sensor(self) -> int:
+        sleep(1)  # wait for sensor to stabilize
         msg = Message()
         msg.id = 137
         msg.ctrl = 0x00
@@ -762,19 +764,7 @@ class DobotApi:
         r, g, b = color
         return r * 100 + g * 10 + b
     
-    def color_sensor_get_color_red(self):
-        raw_color = self.get_color()
-        return raw_color[0]
-    
-    def color_sensor_get_color_green(self):
-        raw_color = self.get_color()
-        return raw_color[1]
-    
-    def color_sensor_get_color_blue(self):
-        raw_color = self.get_color()
-        return raw_color[2]
-    
-    def _set_ir_sensor(self, enable):
+    def set_ir_sensor(self, enable: bool):
         msg = Message()
         msg.id = 138
         msg.ctrl = 0x01 # RW ON
@@ -788,13 +778,7 @@ class DobotApi:
         response = self._send_command(msg)
         return response
     
-    def ir_sensor_enable(self):
-        return self._set_ir_sensor(True)
-
-    def ir_sensor_disable(self):
-        return self._set_ir_sensor(False)
-    
-    def ir_sensor_detect(self):
+    def read_ir_sensor(self) -> int:
         msg = Message()
         msg.id = 138
         msg.ctrl = 0x00
@@ -803,7 +787,7 @@ class DobotApi:
         msg.params = bytearray([0x03])
         response = self._send_command(msg)
         detected = response.params
-        return tuple(detected)[0]
+        return tuple(detected)[0] # INT
 
 
     def _set_cp_params(self, velocity: float, acceleration: float, period: float) -> Message:

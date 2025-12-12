@@ -87,6 +87,14 @@ class Dobot(metaclass=ABCMeta):
         if not self.simulator:
             return self._dobot.read_color_sensor()
 
+    def set_ir_sensor(self, enable: bool) -> None:
+        if not self.simulator:
+            self._dobot.set_ir_sensor(enable)
+
+    def read_ir_sensor(self) -> bool:
+        if not self.simulator:
+            return self._dobot.read_ir_sensor()
+
     def conveyor_speed(self, speed: float, direction: int = 1) -> None:
         if not self.simulator:
             self._dobot.conveyor_belt(speed, direction)

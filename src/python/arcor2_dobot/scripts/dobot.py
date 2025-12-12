@@ -212,6 +212,66 @@ def get_color_sensor_color() -> RespT:
     assert _dobot is not None
     return jsonify(_dobot.read_color_sensor()), 200
 
+@app.route("/ir_sensor/state", methods=["PUT"])
+@requires_started
+def put_ir_sensor_enable() -> RespT:
+    """Enable or disable the infraRed sensor.
+    ---
+    put:
+        description: Enable or disable the IR sensor.
+        tags:
+           - IR Sensor
+        parameters:
+            - in: query
+              name: enable
+              schema:
+                type: boolean
+        responses:
+            204:
+              description: Ok
+            500:
+              description: "Error types: **General**, **StartError**."
+              content:
+                application/json:
+                  schema:
+                    $ref: WebApiError
+    """   
+    state_str = request.args.get("enable", "false").lower()
+    if state_str == "true":
+        state = True
+    else:
+        state = False
+    assert _dobot is not None
+    _dobot.set_ir_sensor(state)
+    return Response(status=204)
+
+
+@app.route("/ir_sensor/read", methods=["GET"])
+@requires_started
+def get_ir_sensor_detect() -> RespT:
+    """Get the IR sensor value.
+    ---
+    get:
+        description: Get the IR sensor value.
+        tags:
+           - IR Sensor
+        responses:
+            200:
+              description: Ok
+              content:
+                application/json:
+                    schema:
+                        type: boolean
+            500:
+              description: "Error types: **General**, **StartError**."
+              content:
+                application/json:
+                  schema:
+                    $ref: WebApiError
+    """   
+    assert _dobot is not None
+    return jsonify(_dobot.read_ir_sensor()), 200
+
 
 @app.route("/conveyor/speed", methods=["PUT"])
 @requires_started
@@ -252,10 +312,10 @@ def put_conveyor_speed() -> RespT:
     """
 
     speed = float(request.args.get("velocity", default=50.0))
-    direction = request.args.get("direction", default="forward")
+    direction = request.args.get("direction", default="left")
 
     assert _dobot is not None
-    _dobot.conveyor_speed(speed, 1 if direction == "forward" else -1)
+    _dobot.conveyor_speed(speed, 1 if direction == "left" else -1)
     return Response(status=204)
 
 
