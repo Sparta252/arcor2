@@ -1,14 +1,11 @@
 import time
-from dataclasses import dataclass
 
-from arcor2 import rest
-from arcor2.data.common import ActionMetadata, Pose, StrEnum
-from arcor2.data.object_type import Models
+from arcor2.data.common import ActionMetadata, Pose
 from arcor2.exceptions import Arcor2Exception
-from arcor2.object_types.abstract import CollisionObject
+from arcor2_web import rest
 
 from .conveyor_belt import ConveyorBelt, Direction
-from .fit_common_mixin import FitCommonMixin, UrlSettings  # noqa:ABS101
+
 
 class ConveyorBeltExtended(ConveyorBelt):
     mesh_filename = "conveyor_belt_extended.fbx"
@@ -50,12 +47,12 @@ class ConveyorBeltExtended(ConveyorBelt):
         """
         # color value is a 3-digit number representing RGB components
         # e.g., 101 means Red=1, Green=0, Blue=1
-        color_value_red = color_value//100
-        color_value_green = color_value//10%10
-        color_value_blue = color_value%10
-        if strict_mode: # all components must match
+        color_value_red = color_value // 100
+        color_value_green = color_value // 10 % 10
+        color_value_blue = color_value % 10
+        if strict_mode:  # all components must match
             return (red == color_value_red) and (green == color_value_green) and (blue == color_value_blue)
-        else: # non-strict mode, at least one component must match
+        else:  # non-strict mode, at least one component must match
             return (red == color_value_red == 1) or (green == color_value_green == 1) or (blue == color_value_blue == 1) or (not (red or green or blue))
         
     ifColor.__action__ = ActionMetadata()  # type: ignore
@@ -88,12 +85,10 @@ class ConveyorBeltExtended(ConveyorBelt):
 
     def read_ir_until_detected(self, *, an: str | None = None) -> None:
         """Read value from GP4 IR sensor until object is detected."""
-        while (not self.read_ir_sensor()):
+        while not self.read_ir_sensor():
             time.sleep(0.1)
     
     read_ir_until_detected.__action__ = ActionMetadata(composite=True)  # type: ignore
-    
-
 
     def test_position(self, *, an: str | None = None) -> Pose:
         """Get middle position of the conveyor belt."""
@@ -102,4 +97,3 @@ class ConveyorBeltExtended(ConveyorBelt):
         return position
     
     test_position.__action__ = ActionMetadata()  # type: ignore
-
