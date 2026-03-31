@@ -5,12 +5,14 @@ import copy
 import json
 import logging
 import os
+import time
+from datetime import datetime, timezone
 from functools import wraps
 
 from flask import Response, jsonify, request
 
 from arcor2 import env
-from arcor2.data.common import Joint, Pose, StrEnum
+from arcor2.data.common import Joint, Pose, Position, StrEnum, quaternion
 from arcor2.data.scene import LineCheck
 from arcor2.helpers import port_from_url
 from arcor2.logging import get_logger
@@ -273,6 +275,193 @@ def get_ir_sensor_detect() -> RespT:
     return jsonify(_dobot.read_ir_sensor()), 200
 
 
+@app.route("/color_sensor/ifColor", methods=["POST"])
+@requires_started
+def post_color_sensor_if_color() -> RespT:
+    """Check if the color sensor reads the specified color.
+    ---
+    post:
+        description: Read the color sensor and check if it matches the specified color components.
+        tags:
+           - Color Sensor
+        parameters:
+            - in: query
+              name: red
+              schema:
+                type: boolean
+                default: false
+            - in: query
+              name: green
+              schema:
+                type: boolean
+                default: false
+            - in: query
+              name: blue
+              schema:
+                type: boolean
+                default: false
+            - in: query
+              name: strictMode
+              schema:
+                type: boolean
+                default: false
+        responses:
+            200:
+              description: Ok
+              content:
+                application/json:
+                    schema:
+                        type: boolean
+            500:
+              description: "Error types: **General**, **StartError**."
+              content:
+                application/json:
+                  schema:
+                    $ref: WebApiError
+    """
+    assert _dobot is not None
+    color_value = _dobot.read_color_sensor()
+    red = request.args.get("red", "false").lower() == "true"
+    green = request.args.get("green", "false").lower() == "true"
+    blue = request.args.get("blue", "false").lower() == "true"
+    strict_mode = request.args.get("strictMode", "false").lower() == "true"
+
+    color_value_red = color_value // 100
+    color_value_green = color_value // 10 % 10
+    color_value_blue = color_value % 10
+
+    if strict_mode:
+        result = (int(red) == color_value_red) and (int(green) == color_value_green) and (int(blue) == color_value_blue)
+    else:
+        result = (red and color_value_red == 1) or (green and color_value_green == 1) or (blue and color_value_blue == 1) or (not (red or green or blue))
+
+    print(f"DEBUG ifColor: color_value={color_value} red={red} green={green} blue={blue} strict_mode={strict_mode} result={result}", flush=True)
+    return jsonify(result), 200
+
+
+@app.route("/ir_sensor/wait_until_detected", methods=["POST"])
+@requires_started
+def post_ir_wait_until_detected() -> RespT:
+    """Wait until the IR sensor detects an object.
+    ---
+    post:
+        description: Poll the IR sensor at 50 ms intervals until an object is detected or timeout is reached.
+        tags:
+           - IR Sensor
+        parameters:
+            - in: query
+              name: timeout
+              schema:
+                type: number
+                format: float
+                default: 30.0
+        responses:
+            204:
+              description: Ok - object detected
+            500:
+              description: "Error types: **General**, **StartError**."
+              content:
+                application/json:
+                  schema:
+                    $ref: WebApiError
+    """
+    assert _dobot is not None
+    timeout = float(request.args.get("timeout", "30.0"))
+    start = time.monotonic()
+    while not _dobot.read_ir_sensor():
+        if time.monotonic() - start > timeout:
+            raise DobotGeneral("IR sensor detection timeout.")
+        time.sleep(0.05)
+    return Response(status=204)
+
+
+@app.route("/pickup/moving_object", methods=["POST"])
+@requires_started
+def post_pickup_moving_object() -> RespT:
+    """Pick up an object moving on the conveyor belt.
+    ---
+    post:
+        description: >
+          Compute catch pose from starting pose, belt pose and belt speed,
+          then execute suck + move + timed wait + move down to pick up the object.
+        tags:
+           - Robot
+        parameters:
+            - in: query
+              name: beltSpeed
+              schema:
+                type: number
+                format: float
+                default: 5.0
+              description: Belt speed in cm/s
+        requestBody:
+              content:
+                application/json:
+                  schema:
+                    type: array
+                    items:
+                        $ref: Pose
+                    description: "[starting_pose, belt_pose]"
+        responses:
+            200:
+              description: Ok
+              content:
+                application/json:
+                    schema:
+                        $ref: Pose
+            500:
+              description: "Error types: **General**, **DobotGeneral**, **StartError**."
+              content:
+                application/json:
+                  schema:
+                    $ref: WebApiError
+    """
+    assert _dobot is not None
+
+    if not isinstance(request.json, list) or len(request.json) != 2:
+        raise DobotGeneral("Body should be a JSON array with [starting_pose, belt_pose].")
+
+    starting_pose = Pose.from_dict(request.json[0])
+    belt_pose = Pose.from_dict(request.json[1])
+    belt_speed_cm_s = float(request.args.get("beltSpeed", "5.0"))
+    belt_speed_mm_s = belt_speed_cm_s * 10  # convert cm/s to mm/s
+
+    basic_vector = [0, 1, 0]
+    q = belt_pose.orientation.as_quaternion()
+    direction = quaternion.rotate_vectors(q, basic_vector)
+    moving_constant = 2.7
+    add_x = direction[0] * 0.001 * belt_speed_mm_s * moving_constant
+    add_y = direction[1] * 0.001 * belt_speed_mm_s * moving_constant
+    add_z = direction[2] * 0.001 * belt_speed_mm_s * moving_constant + 0.05  # add vertical offset
+
+    catch_position = Position(
+        x=starting_pose.position.x + add_x,
+        y=starting_pose.position.y + add_y,
+        z=starting_pose.position.z + add_z,
+    )
+    catch_pose = Pose(orientation=starting_pose.orientation, position=catch_position)
+
+    print(f"DEBUG pickup: belt_speed_cm_s={belt_speed_cm_s} belt_speed_mm_s={belt_speed_mm_s} catch_pose={catch_pose}", flush=True)
+
+    start = datetime.now(timezone.utc)
+    _dobot.suck()
+    _dobot.move(catch_pose, MoveType.JOINTS, 100, 100)
+
+    remain_in_sec = 2.15 - (datetime.now(timezone.utc) - start).total_seconds()
+    if remain_in_sec > 0:
+        print(f"Waiting for {remain_in_sec} seconds to synchronize with the moving object", flush=True)
+        time.sleep(remain_in_sec)
+
+    print(f"MOVING DOWN", flush=True)
+    catch_pose.position.z -= 0.05  # move down to the object
+    _dobot.move(catch_pose, MoveType.JOINTS, 100, 100)
+    catch_pose.position.z += 0.05
+    print(f"MOVING UP", flush=True)
+    #_dobot.move(catch_pose, MoveType.JOINTS, 100, 100)
+
+    return jsonify(catch_pose), 200
+
+
 @app.route("/conveyor/speed", methods=["PUT"])
 @requires_started
 def put_conveyor_speed() -> RespT:
@@ -370,7 +559,7 @@ def put_conveyor_distance() -> RespT:
     distance = float(request.args.get("distance", default=1))
 
     assert _dobot is not None
-    print(f"DEBUG SENDING: speed_mm_s={speed*10} direction={direction*10} distance={distance}", flush=True)
+    print(f"DEBUG SENDING: speed_mm_s={speed*10} direction={direction} distance_mm={distance*10}", flush=True)
     _dobot.conveyor_distance(speed * 10, distance * 10, 1 if direction == "left" else -1)
     return Response(status=204)
 
