@@ -279,7 +279,7 @@ def put_conveyor_speed() -> RespT:
     """Set the conveyor belt speed.
     ---
     put:
-        description: Set the conveyor belt speed.
+        description: Set the conveyor belt speed in cm/s.
         tags:
            - Conveyor Belt
         parameters:
@@ -287,18 +287,18 @@ def put_conveyor_speed() -> RespT:
               in: query
               schema:
                 type: number
-                default: 50.0
+                default: 5.0
                 format: float
                 minimum: 0
-                maximum: 100
+                maximum: 12.0
             - in: query
               name: direction
               schema:
                 type: string
                 default: forward
                 enum:
-                    - forward
-                    - backwards
+                    - left
+                    - right
               description: Direction
         responses:
             204:
@@ -311,11 +311,12 @@ def put_conveyor_speed() -> RespT:
                     $ref: WebApiError
     """
 
-    speed = float(request.args.get("velocity", default=50.0))
+    speed = float(request.args.get("velocity", default=5.0))
     direction = request.args.get("direction", default="left")
 
     assert _dobot is not None
-    _dobot.conveyor_speed(speed, 1 if direction == "left" else -1)
+    print(f"DEBUG SENDING: speed_mm_s={speed*10} direction={direction}", flush=True)
+    _dobot.conveyor_speed(speed * 10, 1 if direction == "left" else -1)
     return Response(status=204)
 
 
@@ -333,15 +334,15 @@ def put_conveyor_distance() -> RespT:
               in: query
               schema:
                 type: number
-                default: 50.0
+                default: 5.0
                 format: float
                 minimum: 0
-                maximum: 100
+                maximum: 12.0
             - name: distance
               in: query
               schema:
                 type: number
-                default: 0.1
+                default: 1
                 format: float
                 minimum: 0
             - in: query
@@ -364,12 +365,13 @@ def put_conveyor_distance() -> RespT:
                     $ref: WebApiError
     """
 
-    speed = float(request.args.get("velocity", default=50.0))
+    speed = float(request.args.get("velocity", default=5.0))
     direction = request.args.get("direction", default="left")
-    distance = float(request.args.get("distance", default=0.1))
+    distance = float(request.args.get("distance", default=1))
 
     assert _dobot is not None
-    _dobot.conveyor_distance(speed, distance * 1000, 1 if direction == "left" else -1)
+    print(f"DEBUG SENDING: speed_mm_s={speed*10} direction={direction*10} distance={distance}", flush=True)
+    _dobot.conveyor_distance(speed * 10, distance * 10, 1 if direction == "left" else -1)
     return Response(status=204)
 
 

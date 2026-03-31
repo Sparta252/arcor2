@@ -26,7 +26,6 @@ def main() -> None:
         file_to_upload=get_data(ConveyorBelt.mesh_filename),
     )
 
-    #upload_whatever(FitCommonMixin)
     upload_def(
         ConveyorBeltExtended,
         Mesh(ConveyorBeltExtended.__name__, ConveyorBeltExtended.mesh_filename),

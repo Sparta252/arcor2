@@ -1,9 +1,11 @@
 from arcor2 import DynamicParamTuple as DPT
-from arcor2.data.common import ActionMetadata, Joint, Pose, StrEnum
+from arcor2.data.common import ActionMetadata, Joint, Pose, StrEnum, Position, Orientation, quaternion
 from arcor2.data.robot import RobotType
 from arcor2_object_types.abstract import Robot, RobotException
 from arcor2_web import rest
 
+from datetime import datetime, timezone
+import time
 from .fit_common_mixin import FitCommonMixin  # noqa:ABS101
 
 
@@ -16,6 +18,9 @@ class MoveType(StrEnum):
     JOINTS = "JOINTS"
     LINEAR = "LINEAR"
 
+class Direction(StrEnum):
+    LEFT = "left"
+    RIGHT = "right"
 
 class AbstractDobot(FitCommonMixin, Robot):
     robot_type = RobotType.SCARA
@@ -160,6 +165,52 @@ class AbstractDobot(FitCommonMixin, Robot):
 
     def robot_joints(self, include_gripper: bool = False) -> list[Joint]:
         return rest.call(rest.Method.GET, f"{self.settings.url}/joints", list_return_type=Joint)
+
+    def my_pickup_moving_object(self, starting_pose: Pose, belt_pose: Pose, belt_speed: float = 5.0, direction: Direction = Direction.LEFT, *, an: str | None = None) -> Pose:
+        """Pickup an object moving on the conveyor belt
+        
+        :param starting_pose: the initial pose of the object on the belt
+        :param belt_pose: the current pose of the conveyor belt (used to determine the direction of the belt movement)
+        :param belt_speed: speed of the conveyor belt in cm/s
+        :param direction: direction of the belt movement (left or right)"""
+        
+        basic_vector = [0,1,0];
+        belt_speed*=10; # convert from cm/s to mm/s
+        q = belt_pose.orientation.as_quaternion()
+        direction = quaternion.rotate_vectors(q, basic_vector)  # direction of the belt movement based on the conveyor orientation
+        moving_constant = 2.7;
+        add_x = direction[0] * 0.001 * belt_speed * moving_constant
+        add_y = direction[1] * 0.001 * belt_speed * moving_constant
+        add_z = direction[2] * 0.001 * belt_speed * moving_constant + 0.05 # add some vertical offset to ensure the gripper goes above the object
+        catch_position = Position(
+            x=starting_pose.position.x + add_x,
+            y=starting_pose.position.y + add_y,
+            z=starting_pose.position.z + add_z
+        )
+        catch_pose = Pose(
+            orientation=starting_pose.orientation,
+            position=catch_position
+        )
+        start = datetime.now(timezone.utc)
+        self.suck();
+        self.move(catch_pose, MoveType.JOINTS, 100, 100, safe=True)
+
+        remain_in_sec = 2.15 - (datetime.now(timezone.utc) - start).total_seconds()
+        if remain_in_sec > 0:
+            print(f"Waiting for {remain_in_sec} seconds to synchronize with the moving object", flush=True)
+            time.sleep(remain_in_sec)
+        print(f"MOVING DOWN", flush=True)
+        catch_pose.position.z -= 0.05  # move down to the object
+        self.move(catch_pose, MoveType.JOINTS, 100, 100, safe=True)
+        catch_pose.position.z += 0.05
+        print(f"MOVING UP", flush=True)
+        #self.move(catch_pose, MoveType.JOINTS, 100, 100, safe=True)
+        return catch_pose;
+        # self.move(catch_pose, MoveType.JOINTS, 100, 100, safe=True)
+        # catch_pose.position.z += 0.05  # move back up with the object
+
+    my_pickup_moving_object.__action__ = ActionMetadata(composite=True)  # type: ignore
+
 
     home.__action__ = ActionMetadata()  # type: ignore
     move.__action__ = ActionMetadata()  # type: ignore
