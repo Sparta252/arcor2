@@ -1,17 +1,10 @@
 from dataclasses import dataclass
-from datetime import datetime, timezone
-import time
 
-from arcor2.data.common import ActionMetadata, Pose, StrEnum, Joint, Position, Orientation, quaternion
+from arcor2.data.common import Joint, Pose, StrEnum
 from arcor2_web import rest
 
 from .abstract_dobot import AbstractDobot, MoveType  # noqa:ABS101
 from .fit_common_mixin import UrlSettings  # noqa:ABS101
-
-class Direction(StrEnum):
-    LEFT = "left"
-    RIGHT = "right"
-    
 class Joints(StrEnum):
     J1 = "magician_joint_1"
     J2 = "magician_joint_2"
@@ -71,36 +64,3 @@ class DobotMagician(AbstractDobot):
         """
 
         return rest.call(rest.Method.PUT, f"{self.settings.url}/fk", body=joints, return_type=Pose)
-
-    # def pickup_moving_object(self, starting_pose: Pose, target_pose: Pose, belt_speed: float = 50, direction: Direction = Direction.LEFT, *, an: str | None = None) -> None:
-    #     """Pickup an object moving on the conveyor belt"""
-        
-    #     basic_vector = [0,1,0];
-    #     q = self.pose.orientation.as_quaternion()
-    #     direction = quaternion.rotate_vectors(q, basic_vector)  # direction of the belt movement based on the conveyor orientation
-    #     moving_constant = 2.7;
-    #     add_x = direction[0] * 0.001 * belt_speed * moving_constant
-    #     add_y = direction[1] * 0.001 * belt_speed * moving_constant
-    #     add_z = direction[2] * 0.001 * belt_speed * moving_constant + 0.05 # add some vertical offset to ensure the gripper goes above the object
-    #     catch_position = Position(
-    #         x=target_pose.position.x + add_x,
-    #         y=target_pose.position.y + add_y,
-    #         z=target_pose.position.z + add_z
-    #     )
-    #     catch_pose = Pose(
-    #         orientation=target_pose.orientation,
-    #         position=catch_position
-    #     )
-    #     start = datetime.now(timezone.utc)
-    #     self.move(catch_pose, MoveType.JOINTS, 100, 100, safe=True)
-
-    #     # remain_in_sec = 2.0 - (datetime.now(timezone.utc) - start).total_seconds()
-    #     # if remain_in_sec > 0:
-    #     #     time.sleep(remain_in_sec)
-    #     time.sleep(2)
-
-    #     catch_pose.position.z -= 0.05  # move down to the object
-    #     self.move(catch_pose, MoveType.JOINTS, 100, 100, safe=True)
-    #     catch_pose.position.z += 0.05  # move back up with the object
-
-    # pickup_moving_object.__action__ = ActionMetadata()  # type: ignore

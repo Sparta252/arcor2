@@ -1,5 +1,4 @@
 import time
-from datetime import datetime
 
 from dataclasses import dataclass
 
@@ -62,25 +61,12 @@ class ConveyorBelt(FitCommonMixin, CollisionObject):
 
         assert 0.0 <= velocity <= 12.0
 
-        print(f"DEBUG BEFORE speed_mm_s={velocity} direction={direction}", flush=True)
+        print(f"DEBUG set_velocity: velocity={velocity} direction={direction}", flush=True)
         rest.call(
             rest.Method.PUT,
             f"{self.settings.url}/conveyor/speed",
             params={"velocity": velocity, "direction": direction},
         )
-
-        # Testing speed
-        # now = datetime.now()
-        # mytime = now.strftime("%H:%M:%S.%f")[:-3]
-        # print("TIME: ", mytime, flush=True)
-        # #print
-        #print(f"DEBUG speed_mm_s={velocity} direction={direction}", flush=True)
-        # time.sleep(5)  # wait a bit to ensure the command is processed
-        # rest.call(
-        #     rest.Method.PUT,
-        #     f"{self.settings.url}/conveyor/speed",
-        #     params={"velocity": 0.0, "direction": direction},
-        # )
 
     set_velocity.__action__ = ActionMetadata()  # type: ignore
 
@@ -104,14 +90,11 @@ class ConveyorBelt(FitCommonMixin, CollisionObject):
         assert 0.0 <= velocity <= 12.0
         assert 0.0 <= distance <= 9999.0
 
-        print(f"DEBUG BEFORE speed_mm_s={velocity} direction={direction}", flush=True)
+        print(f"DEBUG move_distance: velocity={velocity} distance={distance} direction={direction}", flush=True)
         rest.call(
             rest.Method.PUT,
             f"{self.settings.url}/conveyor/distance",
             params={"velocity": velocity, "distance": distance, "direction": direction},
         )
-
-
-        
 
     move_distance.__action__ = ActionMetadata()  # type: ignore
