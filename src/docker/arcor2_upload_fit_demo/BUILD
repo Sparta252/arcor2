@@ -1,1 +1,1 @@
-docker_image(name="arcor2_upload_fit_demo", repository="sparta252/arcor2_upload_fit_demo", image_tags=["1.5.84"])
+docker_image(name="arcor2_upload_fit_demo", repository="sparta252/arcor2_upload_fit_demo", image_tags=["1.5.87"])

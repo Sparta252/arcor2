@@ -181,42 +181,28 @@ class AbstractDobot(FitCommonMixin, Robot):
              params={"velocity": belt_speed, "direction": direction},
              return_type=Pose
         )
-        # basic_vector = [0,1,0];
-        # belt_speed*=10; # convert from cm/s to mm/s
-        # q = belt_pose.orientation.as_quaternion()
-        # direction = quaternion.rotate_vectors(q, basic_vector)  # direction of the belt movement based on the conveyor orientation
-        # moving_constant = 2.7;
-        # add_x = direction[0] * 0.001 * belt_speed * moving_constant
-        # add_y = direction[1] * 0.001 * belt_speed * moving_constant
-        # add_z = direction[2] * 0.001 * belt_speed * moving_constant + 0.05 # add some vertical offset to ensure the gripper goes above the object
-        # catch_position = Position(
-        #     x=starting_pose.position.x + add_x,
-        #     y=starting_pose.position.y + add_y,
-        #     z=starting_pose.position.z + add_z
-        # )
-        # catch_pose = Pose(
-        #     orientation=starting_pose.orientation,
-        #     position=catch_position
-        # )
-        # start = datetime.now(timezone.utc)
-        # self.suck();
-        # self.move(catch_pose, MoveType.JOINTS, 100, 100, safe=True)
-
-        # remain_in_sec = 2.15 - (datetime.now(timezone.utc) - start).total_seconds()
-        # if remain_in_sec > 0:
-        #     print(f"Waiting for {remain_in_sec} seconds to synchronize with the moving object", flush=True)
-        #     time.sleep(remain_in_sec)
-        # print(f"MOVING DOWN", flush=True)
-        # catch_pose.position.z -= 0.05  # move down to the object
-        # self.move(catch_pose, MoveType.JOINTS, 100, 100, safe=True)
-        # catch_pose.position.z += 0.05
-        # print(f"MOVING UP", flush=True)
-        #self.move(catch_pose, MoveType.JOINTS, 100, 100, safe=True)
         return resp;
-        # self.move(catch_pose, MoveType.JOINTS, 100, 100, safe=True)
-        # catch_pose.position.z += 0.05  # move back up with the object
 
     my_pickup_moving_object.__action__ = ActionMetadata(composite=True)  # type: ignore
+
+    def dynamic_pickup(self, starting_pose: Pose, belt_pose: Pose, belt_speed: float = 5.0, direction: Direction = Direction.LEFT, *, an: str | None = None) -> Pose:
+        """Pickup an object moving on the conveyor belt
+        
+        :param starting_pose: the initial pose of the object on the belt
+        :param belt_pose: the current pose of the conveyor belt (used to determine the direction of the belt movement)
+        :param belt_speed: speed of the conveyor belt in cm/s
+        :param direction: direction of the belt movement (left or right)"""
+        
+        resp = rest.call(
+            rest.Method.PUT,
+            f"{self.settings.url}/pickup_moving_object",
+            body=[starting_pose, belt_pose],
+             params={"velocity": belt_speed, "direction": direction},
+             return_type=Pose
+        )
+        return resp;
+
+    dynamic_pickup.__action__ = ActionMetadata(composite=True)  # type: ignore
 
 
     home.__action__ = ActionMetadata()  # type: ignore
