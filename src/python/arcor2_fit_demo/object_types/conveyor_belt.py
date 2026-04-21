@@ -50,7 +50,7 @@ class ConveyorBelt(FitCommonMixin, CollisionObject):
         self.set_velocity(0.0, Direction.RIGHT)
 
     def set_velocity(
-        self, velocity: float = 5.0, direction: Direction = Direction.RIGHT, *, an: None | str = None
+        self, velocity: float = 5.0, direction: Direction = Direction.LEFT, *, an: None | str = None
     ) -> None:
         """Belt will move indefinitely with given velocity - value is in centimeters per second.
 
@@ -62,25 +62,11 @@ class ConveyorBelt(FitCommonMixin, CollisionObject):
 
         assert 0.0 <= velocity <= 12.0
 
-        print(f"DEBUG BEFORE speed_mm_s={velocity} direction={direction}", flush=True)
         rest.call(
             rest.Method.PUT,
             f"{self.settings.url}/conveyor/speed",
             params={"velocity": velocity, "direction": direction},
         )
-
-        # Testing speed
-        # now = datetime.now()
-        # mytime = now.strftime("%H:%M:%S.%f")[:-3]
-        # print("TIME: ", mytime, flush=True)
-        # #print
-        #print(f"DEBUG speed_mm_s={velocity} direction={direction}", flush=True)
-        # time.sleep(5)  # wait a bit to ensure the command is processed
-        # rest.call(
-        #     rest.Method.PUT,
-        #     f"{self.settings.url}/conveyor/speed",
-        #     params={"velocity": 0.0, "direction": direction},
-        # )
 
     set_velocity.__action__ = ActionMetadata()  # type: ignore
 
@@ -88,7 +74,7 @@ class ConveyorBelt(FitCommonMixin, CollisionObject):
         self,
         velocity: float = 1.0,
         distance: float = 5.0,
-        direction: Direction = Direction.RIGHT,
+        direction: Direction = Direction.LEFT,
         *,
         an: None | str = None,
     ) -> None:
@@ -104,7 +90,6 @@ class ConveyorBelt(FitCommonMixin, CollisionObject):
         assert 0.0 <= velocity <= 12.0
         assert 0.0 <= distance <= 9999.0
 
-        print(f"DEBUG BEFORE speed_mm_s={velocity} direction={direction}", flush=True)
         rest.call(
             rest.Method.PUT,
             f"{self.settings.url}/conveyor/distance",

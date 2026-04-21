@@ -79,12 +79,16 @@ class MODE_PTP(IntEnum):
     JUMP_MOVL_XYZ = 0x09
 
 
-STEP_PER_CIRCLE = 360.0 / 1.8 * 10.0 * 16.0  # TODO how was this calculated?
-MM_PER_CIRCLE = 3.1415926535898 * 36.0  # pi * diameter of c.b.'s shaft
-HUNGARIAN_CONSTANT = 1.893  # to correct c.b. distance (obtained by measurement)
+STEP_ANGLE_DEG = 1.8
+GEAR_RATIO = 10.0
+MICROSTEPPING = 8.0
+SHAFT_DIAMETER = 34.0
 
-# Using STEP_PER_CIRCLE / 2 / MM_PER_CIRCLE (Where is used 34.0 instead of 36.0) / 1.0075 (correction)
-CONVERSION_CONSTANT = 159.145 / 1.062433621068039 / 1.0075 # value to convert from mm/s to steps/s, obtained via reverse engineering the DobotLab software
+
+HUNGARIAN_CONSTANT = 1.0075 # correction (obtained by measurement)
+STEP_PER_CIRCLE = 360.0 / STEP_ANGLE_DEG * GEAR_RATIO * MICROSTEPPING 
+MM_PER_CIRCLE = 3.1415926535898 * SHAFT_DIAMETER * HUNGARIAN_CONSTANT # pi * diameter of c.b.'s shaft * calibration Factor 
+STEPS_PER_MM = STEP_PER_CIRCLE / MM_PER_CIRCLE
 
 
 class DobotApiException(Exception):
@@ -694,8 +698,7 @@ class DobotApi:
 
     def conveyor_belt(self, speed: float, direction: int = 1, interface: int = 0) -> None:
         if 0.0 <= speed <= 120.0 and (direction == 1 or direction == -1):
-            #motor_speed = speed * STEP_PER_CIRCLE / MM_PER_CIRCLE * direction
-            motor_speed = speed * CONVERSION_CONSTANT * direction
+            motor_speed = speed * STEPS_PER_MM * direction
             self._set_stepper_motor(int(motor_speed), interface)
         else:
             raise DobotApiException("Wrong Parameter")
@@ -718,10 +721,8 @@ class DobotApi:
 
     def conveyor_belt_distance(self, speed: float, distance: float, direction: int = 1, interface: int = 0) -> int:
         if 0.0 <= speed <= 120.0 and (direction == 1 or direction == -1):
-            #motor_speed = speed * STEP_PER_CIRCLE / MM_PER_CIRCLE * direction
-            motor_speed = speed * CONVERSION_CONSTANT * direction
-            #steps = (distance * STEP_PER_CIRCLE / MM_PER_CIRCLE) / HUNGARIAN_CONSTANT
-            steps = distance * CONVERSION_CONSTANT #/ 1.08 #/ HUNGARIAN_CONSTANT
+            motor_speed = speed * STEPS_PER_MM * direction
+            steps = distance * STEPS_PER_MM
             return self._extract_cmd_index(self._set_stepper_motor_distance(int(motor_speed), int(steps), interface))
         else:
             raise DobotApiException("Wrong conveyor belt parameters.")
@@ -767,6 +768,8 @@ class DobotApi:
         msg.params = bytearray([])
         response = self._send_command(msg)
         color = response.params
+        # Expecting the response is always in RGB format and each color is represented by 0/1.
+        # during testing, was available only 1 type of sensor
         r, g, b = color
         return r * 100 + g * 10 + b
     
@@ -788,9 +791,7 @@ class DobotApi:
         msg = Message()
         msg.id = 138
         msg.ctrl = 0x00
-        # must be added 0x03 - i dont know why (probably PORT (GP4))
-        # according to dobot docs its not needed, but without it it doesnt 
-        msg.params = bytearray([0x03])
+        msg.params = bytearray([0x03]) # specify the port to read from (GP4)
         response = self._send_command(msg)
         detected = response.params
         return tuple(detected)[0] # INT
@@ -920,7 +921,3 @@ class DobotApi:
                     self.wait_for_cmd(indexes.popleft())
 
         self.wait_for_cmd(self.laze(0, False))
-
-
-    def sparta_test(self):
-        self.move_to();

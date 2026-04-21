@@ -5,12 +5,14 @@ import copy
 import json
 import logging
 import os
+import time
+from datetime import datetime, timezone
 from functools import wraps
 
 from flask import Response, jsonify, request
 
 from arcor2 import env
-from arcor2.data.common import Joint, Pose, StrEnum
+from arcor2.data.common import Joint, Pose, Position, StrEnum, quaternion
 from arcor2.data.scene import LineCheck
 from arcor2.helpers import port_from_url
 from arcor2.logging import get_logger
@@ -177,11 +179,7 @@ def put_color_sensor_enable() -> RespT:
                   schema:
                     $ref: WebApiError
     """   
-    state_str = request.args.get("enable", "false").lower()
-    if state_str == "true":
-        state = True
-    else:
-        state = False
+    state = request.args.get("enable", "false").lower() == "true"
     assert _dobot is not None
     _dobot.set_color_sensor(state)
     return Response(status=204)
@@ -212,10 +210,80 @@ def get_color_sensor_color() -> RespT:
     assert _dobot is not None
     return jsonify(_dobot.read_color_sensor()), 200
 
+@app.route("/color_sensor/color_match", methods=["GET"])
+def get_color_sensor_color_match() -> RespT:
+    """Check if the color sensor output matches the specified color.
+    ---
+    get:
+        description: Logic comparison of color sensor output value with provided color/s.
+        tags:
+           - Color Sensor
+        parameters:
+            - name: colorValue
+              in: query
+              schema:
+                type: integer
+                default: 0
+            - name: red
+              in: query
+              schema:
+                type: boolean
+                default: false
+            - name: green
+              in: query
+              schema:
+                type: boolean
+                default: false
+            - name: blue
+              in: query
+              schema:
+                type: boolean
+                default: false
+            - name: strict
+              in: query
+              schema:
+                type: boolean
+                default: false
+        responses:
+            200:
+              description: Ok
+              content:
+                application/json:
+                    schema:
+                        type: boolean
+            500:
+              description: "Error types: **General**, **StartError**."
+              content:
+                application/json:
+                  schema:
+                    $ref: WebApiError
+    """
+    assert _dobot is not None
+
+    color_value = int(request.args.get("colorValue", "0"))
+    red = request.args.get("red", "false").lower() == "true"
+    green = request.args.get("green", "false").lower() == "true"
+    blue = request.args.get("blue", "false").lower() == "true"
+    strict = request.args.get("strict", "false").lower() == "true" # all components must match
+
+    # color value is a 3-digit number representing RGB components
+    # e.g., 101 means Red=1, Green=0, Blue=1
+    color_value_red = color_value // 100
+    color_value_green = color_value // 10 % 10
+    color_value_blue = color_value % 10
+
+    
+    if strict:  
+        match = ((red == color_value_red) and (green == color_value_green) and (blue == color_value_blue))
+    else:  # non-strict mode, at least one component must match
+        match = (red == color_value_red == 1) or (green == color_value_green == 1) or (blue == color_value_blue == 1) or (not (red or green or blue))
+
+    return jsonify(match), 200
+
 @app.route("/ir_sensor/state", methods=["PUT"])
 @requires_started
 def put_ir_sensor_enable() -> RespT:
-    """Enable or disable the infraRed sensor.
+    """Enable or disable the infrared sensor.
     ---
     put:
         description: Enable or disable the IR sensor.
@@ -236,11 +304,7 @@ def put_ir_sensor_enable() -> RespT:
                   schema:
                     $ref: WebApiError
     """   
-    state_str = request.args.get("enable", "false").lower()
-    if state_str == "true":
-        state = True
-    else:
-        state = False
+    state = request.args.get("enable", "false").lower() == "true"
     assert _dobot is not None
     _dobot.set_ir_sensor(state)
     return Response(status=204)
@@ -315,7 +379,7 @@ def put_conveyor_speed() -> RespT:
     direction = request.args.get("direction", default="left")
 
     assert _dobot is not None
-    print(f"DEBUG SENDING: speed_mm_s={speed*10} direction={direction}", flush=True)
+    # converting cm/s to mm/s
     _dobot.conveyor_speed(speed * 10, 1 if direction == "left" else -1)
     return Response(status=204)
 
@@ -370,7 +434,7 @@ def put_conveyor_distance() -> RespT:
     distance = float(request.args.get("distance", default=1))
 
     assert _dobot is not None
-    print(f"DEBUG SENDING: speed_mm_s={speed*10} direction={direction*10} distance={distance}", flush=True)
+    # converting cm/s to mm/s
     _dobot.conveyor_distance(speed * 10, distance * 10, 1 if direction == "left" else -1)
     return Response(status=204)
 
@@ -741,6 +805,105 @@ def put_fk() -> RespT:
 
     joints = [Joint.from_dict(j) for j in request.json]
     return jsonify(_dobot.forward_kinematics(joints))
+
+@app.route("/pickup_moving_object", methods=["PUT"])
+@requires_started
+def put_pickup_moving_object() -> RespT:
+    """Pick up a moving object from the conveyor belt.
+    ---
+    put:
+        description: >
+          Compute catch pose from starting pose, belt pose, belt speed and direction.
+          Then move to the catch pose with activated suction cup and pick up the object.
+        tags:
+           - Robot
+        parameters:
+            - name: velocity
+              in: query
+              schema:
+                type: number
+                format: float
+                minimum: 0
+                maximum: 12
+              description: Speed of the conveyor belt in cm/s.
+              default: 5.0
+            - name: direction
+              in: query
+              schema:
+                type: string
+                default: left
+                enum:
+                    - left
+                    - right
+              description: Direction of the conveyor belt movement.
+        requestBody:
+              content:
+                application/json:
+                  schema:
+                    type: array
+                    items:
+                      $ref: Pose
+                    description: "[starting pose, belt pose]"
+        responses:
+            200:
+              description: Ok
+              content:
+                application/json:
+                    schema:
+                        $ref: Pose
+            500:
+              description: "Error types: **General**, **DobotGeneral**, **StartError**."
+              content:
+                application/json:
+                  schema:
+                    $ref: WebApiError
+    """
+    assert _dobot is not None
+
+    if not isinstance(request.json, list) or len(request.json) != 2:
+        raise DobotGeneral("Body should be a JSON array with [starting_pose, belt_pose].")
+
+    starting_pose = Pose.from_dict(request.json[0])
+    belt_pose = Pose.from_dict(request.json[1])
+    velocity = float(request.args.get("velocity", default=5.0))
+    belt_speed_mm_s = velocity * 10
+    direction = request.args.get("direction", default="left")
+
+    # Calculate the catch pose based on the starting pose, belt pose, belt speed and direction.
+    basic_vector = [0, 1, 0]
+    q = belt_pose.orientation.as_quaternion()
+    direction_vector = quaternion.rotate_vectors(q, basic_vector)
+    moving_constant = 2.0 + 0.7  # (2.0) time to reach above the catch position and (0.7) time to move down to grasp + both with some safety margin
+    add_x = direction_vector[0] * 0.001 * belt_speed_mm_s * moving_constant * (1 if direction == "left" else -1)
+    add_y = direction_vector[1] * 0.001 * belt_speed_mm_s * moving_constant * (1 if direction == "left" else -1)
+    add_z = direction_vector[2] * 0.001 * belt_speed_mm_s * moving_constant + 0.05  # add some vertical offset (pickup)
+
+    catch_position = Position(
+        x=starting_pose.position.x + add_x,
+        y=starting_pose.position.y + add_y,
+        z=starting_pose.position.z + add_z
+    )
+
+    catch_pose = Pose(
+        orientation=starting_pose.orientation,
+        position=catch_position
+    )
+
+    # Move to the catch pose with activated suction cup and pick up the object.
+    started = datetime.now(timezone.utc)
+    _dobot.suck()
+    _dobot.move(catch_pose, MoveType.JOINTS, 100, 100)
+
+    remaining_time = 2.15 - (datetime.now(timezone.utc) - started).total_seconds() # time to reach above the catch position + safety margin to ensure object is in the right position
+    if remaining_time > 0:
+        time.sleep(remaining_time)
+
+    catch_pose.position.z -= 0.05  # move down to the object
+    _dobot.move(catch_pose, MoveType.JOINTS, 100, 100)
+    catch_pose.position.z += 0.05  # move back up with the object
+
+
+    return jsonify(catch_pose), 200
 
 
 @app.errorhandler(DobotApiException)
