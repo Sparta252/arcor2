@@ -1,9 +1,11 @@
 from arcor2 import DynamicParamTuple as DPT
-from arcor2.data.common import ActionMetadata, Joint, Pose, StrEnum
+from arcor2.data.common import ActionMetadata, Joint, Pose, StrEnum, Position, Orientation, quaternion
 from arcor2.data.robot import RobotType
 from arcor2_object_types.abstract import Robot, RobotException
 from arcor2_web import rest
 
+from datetime import datetime, timezone
+import time
 from .fit_common_mixin import FitCommonMixin  # noqa:ABS101
 
 
@@ -16,6 +18,9 @@ class MoveType(StrEnum):
     JOINTS = "JOINTS"
     LINEAR = "LINEAR"
 
+class Direction(StrEnum):
+    LEFT = "left"
+    RIGHT = "right"
 
 class AbstractDobot(FitCommonMixin, Robot):
     robot_type = RobotType.SCARA
@@ -160,6 +165,25 @@ class AbstractDobot(FitCommonMixin, Robot):
 
     def robot_joints(self, include_gripper: bool = False) -> list[Joint]:
         return rest.call(rest.Method.GET, f"{self.settings.url}/joints", list_return_type=Joint)
+
+    def dynamic_pickup(self, starting_pose: Pose, belt_pose: Pose, belt_speed: float = 5.0, direction: Direction = Direction.LEFT, *, an: str | None = None) -> Pose:
+        """Pickup an object moving on the conveyor belt
+        
+        :param starting_pose: the initial pose of the object on the belt
+        :param belt_pose: the current pose of the conveyor belt (used to determine the direction of the belt movement)
+        :param belt_speed: speed of the conveyor belt in cm/s
+        :param direction: direction of the belt movement (left or right)"""
+        
+        resp = rest.call(
+            rest.Method.PUT,
+            f"{self.settings.url}/pickup_moving_object",
+            body=[starting_pose, belt_pose],
+             params={"velocity": belt_speed, "direction": direction},
+             return_type=Pose
+        )
+        return resp;
+    dynamic_pickup.__action__ = ActionMetadata(composite=True)  # type: ignore
+
 
     home.__action__ = ActionMetadata()  # type: ignore
     move.__action__ = ActionMetadata()  # type: ignore
