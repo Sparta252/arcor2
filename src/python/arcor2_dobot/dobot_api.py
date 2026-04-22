@@ -1,6 +1,7 @@
 import logging
 import math
 import struct
+from time import sleep
 from collections import deque
 from enum import IntEnum
 from threading import RLock
@@ -78,9 +79,16 @@ class MODE_PTP(IntEnum):
     JUMP_MOVL_XYZ = 0x09
 
 
-STEP_PER_CIRCLE = 360.0 / 1.8 * 10.0 * 16.0  # TODO how was this calculated?
-MM_PER_CIRCLE = 3.1415926535898 * 36.0  # pi * diameter of c.b.'s shaft
-HUNGARIAN_CONSTANT = 1.893  # to correct c.b. distance (obtained by measurement)
+STEP_ANGLE_DEG = 1.8
+GEAR_RATIO = 10.0
+MICROSTEPPING = 8.0
+SHAFT_DIAMETER = 34.0
+
+
+HUNGARIAN_CONSTANT = 1.0075 # correction (obtained by measurement)
+STEP_PER_CIRCLE = 360.0 / STEP_ANGLE_DEG * GEAR_RATIO * MICROSTEPPING 
+MM_PER_CIRCLE = 3.1415926535898 * SHAFT_DIAMETER * HUNGARIAN_CONSTANT # pi * diameter of c.b.'s shaft * calibration Factor 
+STEPS_PER_MM = STEP_PER_CIRCLE / MM_PER_CIRCLE
 
 
 class DobotApiException(Exception):
@@ -689,8 +697,8 @@ class DobotApi:
         self.wait_for_cmd(self._extract_cmd_index(self._set_ptp_coordinate_params(velocity, acceleration)))
 
     def conveyor_belt(self, speed: float, direction: int = 1, interface: int = 0) -> None:
-        if 0.0 <= speed <= 100.0 and (direction == 1 or direction == -1):
-            motor_speed = speed * STEP_PER_CIRCLE / MM_PER_CIRCLE * direction
+        if 0.0 <= speed <= 120.0 and (direction == 1 or direction == -1):
+            motor_speed = speed * STEPS_PER_MM * direction
             self._set_stepper_motor(int(motor_speed), interface)
         else:
             raise DobotApiException("Wrong Parameter")
@@ -712,9 +720,9 @@ class DobotApi:
         return self._send_command(msg)
 
     def conveyor_belt_distance(self, speed: float, distance: float, direction: int = 1, interface: int = 0) -> int:
-        if 0.0 <= speed <= 100.0 and (direction == 1 or direction == -1):
-            motor_speed = speed * STEP_PER_CIRCLE / MM_PER_CIRCLE * direction
-            steps = (distance * STEP_PER_CIRCLE / MM_PER_CIRCLE) / HUNGARIAN_CONSTANT
+        if 0.0 <= speed <= 120.0 and (direction == 1 or direction == -1):
+            motor_speed = speed * STEPS_PER_MM * direction
+            steps = distance * STEPS_PER_MM
             return self._extract_cmd_index(self._set_stepper_motor_distance(int(motor_speed), int(steps), interface))
         else:
             raise DobotApiException("Wrong conveyor belt parameters.")
@@ -737,6 +745,57 @@ class DobotApi:
         msg.params.extend(bytearray(struct.pack("i", speed)))
         msg.params.extend(bytearray(struct.pack("I", distance)))
         return self._send_command(msg)
+
+    def set_color_sensor(self, enable: bool):
+            msg = Message()
+            msg.id = 137
+            msg.ctrl = 0x01 # RW
+            
+            # First byte [ON/OFF], second PORT (GP2), third Version of sensor [0/1]
+            if enable:
+                msg.params = bytearray([0x01, 0x01, 0x01])
+            else:
+                msg.params = bytearray([0x00, 0x01, 0x01])
+
+            response = self._send_command(msg)
+            return response
+    
+    def read_color_sensor(self) -> int:
+        sleep(1)  # wait for sensor to stabilize
+        msg = Message()
+        msg.id = 137
+        msg.ctrl = 0x00
+        msg.params = bytearray([])
+        response = self._send_command(msg)
+        color = response.params
+        # Expecting the response is always in RGB format and each color is represented by 0/1.
+        # during testing, was available only 1 type of sensor
+        r, g, b = color
+        return r * 100 + g * 10 + b
+    
+    def set_ir_sensor(self, enable: bool):
+        msg = Message()
+        msg.id = 138
+        msg.ctrl = 0x01 # RW ON
+        
+        # First byte [ON/OFF], second PORT (GP4), third Version of sensor [0/1]
+        if enable:
+            msg.params = bytearray([0x01, 0x03, 0x01])
+        else:
+            msg.params = bytearray([0x00, 0x03, 0x01])
+
+        response = self._send_command(msg)
+        return response
+    
+    def read_ir_sensor(self) -> int:
+        msg = Message()
+        msg.id = 138
+        msg.ctrl = 0x00
+        msg.params = bytearray([0x03]) # specify the port to read from (GP4)
+        response = self._send_command(msg)
+        detected = response.params
+        return tuple(detected)[0] # INT
+
 
     def _set_cp_params(self, velocity: float, acceleration: float, period: float) -> Message:
         msg = Message()

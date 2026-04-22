@@ -1,12 +1,17 @@
 from dataclasses import dataclass
+from datetime import datetime, timezone
+import time
 
-from arcor2.data.common import Joint, Pose, StrEnum
+from arcor2.data.common import ActionMetadata, Pose, StrEnum, Joint, Position, Orientation, quaternion
 from arcor2_web import rest
 
 from .abstract_dobot import AbstractDobot, MoveType  # noqa:ABS101
 from .fit_common_mixin import UrlSettings  # noqa:ABS101
 
-
+class Direction(StrEnum):
+    LEFT = "left"
+    RIGHT = "right"
+    
 class Joints(StrEnum):
     J1 = "magician_joint_1"
     J2 = "magician_joint_2"

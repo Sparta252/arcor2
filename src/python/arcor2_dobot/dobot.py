@@ -1,5 +1,6 @@
 import math
 import time
+import serial
 from abc import ABCMeta, abstractmethod
 
 import quaternion
@@ -78,6 +79,24 @@ class Dobot(metaclass=ABCMeta):
 
         if not self.simulator:
             self._dobot.close()
+
+    def set_color_sensor(self, enable: bool) -> None:
+        if not self.simulator:
+            self._dobot.set_color_sensor(enable)
+
+    def read_color_sensor(self) -> int:
+        if not self.simulator:
+            return self._dobot.read_color_sensor()
+        return 0
+
+    def set_ir_sensor(self, enable: bool) -> None:
+        if not self.simulator:
+            self._dobot.set_ir_sensor(enable)
+
+    def read_ir_sensor(self) -> int:
+        if not self.simulator:
+            return self._dobot.read_ir_sensor()
+        return 0
 
     def conveyor_speed(self, speed: float, direction: int = 1) -> None:
         if not self.simulator:

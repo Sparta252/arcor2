@@ -7,5 +7,6 @@ arcor2_pex_binary(
         "src/python/arcor2_fit_demo/data/dobot-magician",
         "src/python/arcor2_fit_demo/data:kinect_azure.dae",  # used by OpticalQualityControl
         "src/python/arcor2_fit_demo/data:conveyor_belt.fbx",
+        "src/python/arcor2_fit_demo/data:conveyor_belt_extended.fbx",
     ],
 )
