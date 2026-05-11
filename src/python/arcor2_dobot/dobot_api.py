@@ -761,7 +761,7 @@ class DobotApi:
             return response
     
     def read_color_sensor(self) -> int:
-        sleep(1)  # wait for sensor to stabilize
+        sleep(0.3)  # wait for sensor to stabilize
         msg = Message()
         msg.id = 137
         msg.ctrl = 0x00
